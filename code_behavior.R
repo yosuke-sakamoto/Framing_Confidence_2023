@@ -243,7 +243,7 @@ rbind(AIC_diff_sum_more[which(AIC_diff_sum_more$AIC == min(AIC_diff_sum_more$AIC
         legend.text = element_text(size = 16),
         plot.margin = unit(c(10, 10, 10, 10), "mm")) -> p3
 
-## LMMs
+## Hierarchical linear regressions
 data.frame(Coefficient = c(summary(bestFit_more)$coef[1:4, 1], 
                            summary(bestFit_less)$coef[1:4, 1]), 
            SEM = c(summary(bestFit_more)$coef[1:4, 2], 
