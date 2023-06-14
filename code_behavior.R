@@ -4,8 +4,8 @@ library(lme4)
 library(lmerTest)
 library(car)
 library(cowplot)
-library(ggbreak)
 library(ggeffects)
+
 # Import data
 df <- read.csv("data_behavior.csv", header = TRUE)
 df$LogDiff <- scale(df$LogDiff)
@@ -13,17 +13,12 @@ df$LogTot <- scale(df$LogTot)
 df$LogDCE <- scale(df$LogDCE)
 df$LogDICE <- scale(df$LogDICE)
 df$Conf <- scale(df$Conf)
-df <- mutate(df, DiffRL = RVal - LVal, LogDiffRL = LogRVal - LogLVal)
+df <- mutate(df, DiffRL = RVal - LVal, LogDiffRL = LogRVal - LogLVal, 
+             Baseline = if_else(LVal == 50 | RVal == 50, 1, if_else(LVal == 100 | RVal == 100, 2, 3)))
+df$Baseline <- as.factor(df$Baseline)
 df_more <- filter(df, BlockCond == "MORE")
 df_less <- filter(df, BlockCond == "LESS")
 ################################################################################
-# Accuracy between conditions
-df %>% 
-  group_by(id, BlockCond) %>% 
-  summarise(n = n(), prop = sum(Corr) / n) -> acc
-t.test(filter(acc, BlockCond == "MORE")$prop, 
-       filter(acc, BlockCond == "LESS")$prop, var.equal = T)
-
 # Choice probability
 fit_choice <- glmer(ChosenITM ~ LogDiffRL * BlockCond + 
                       (LogDiffRL + BlockCond|id), data = df, 
@@ -31,7 +26,22 @@ fit_choice <- glmer(ChosenITM ~ LogDiffRL * BlockCond +
                     control = glmerControl(optimizer = "bobyqa"))
 summary(fit_choice)
 Anova(fit_choice)
- ################################################################################
+
+# Accuracy between conditions
+df %>% 
+  group_by(id, BlockCond) %>% 
+  summarise(n = n(), prop = sum(Corr) / n) -> acc
+t.test(filter(acc, BlockCond == "MORE")$prop, 
+       filter(acc, BlockCond == "LESS")$prop, var.equal = T)
+################################################################################
+# Confidence
+fit_conf <- lmer(Conf ~ Baseline + LogDiff + BlockCond +  
+                   Baseline:LogDiff + LogDiff:BlockCond + BlockCond:Baseline + 
+                   (Baseline + LogDiff + BlockCond|id), 
+                 data = df, REML = F, control = lmerControl(optimizer = "bobyqa"))
+summary(fit_conf)
+Anova(fit_conf)
+################################################################################
 # Model comparison
 ## More frame
 ### No random slopes
@@ -149,8 +159,8 @@ bestFit_more <- eval(parse(text = bestFit_more))
 bestFit_less <- eval(parse(text = bestFit_less))
 summary(bestFit_more)
 summary(bestFit_less)
-
-# Plot figure
+################################################################################
+# Plot figures
 ## Choice probability
 coef <- summary(fit_choice)$coef[, 1]
 choice_pred <- function(x, c){
@@ -170,22 +180,39 @@ df %>%
 
 ggplot(df_choice_pred, aes(x = x, y = pred, group = BlockCond)) + 
   geom_line(aes(linetype = BlockCond), linewidth = 1.3) + 
-  geom_point(df_choice_mean, mapping = aes(x = LogDiffRL, y = p, shape = BlockCond, alpha = 0.6)) + 
+  geom_point(df_choice_mean, mapping = aes(x = LogDiffRL, y = p, color = BlockCond), size = 2.5) + 
   scale_x_continuous(breaks = seq(-0.2, 0.2, 0.1), limits = c(-0.25, 0.25), 
                      expand = c(0, 0)) + 
   scale_y_continuous(limits = c(0, 1), expand = c(0, 0)) + 
   scale_linetype_discrete(labels = c("More", "Less")) + 
-  scale_shape_manual(values = c(19, 8), limits = c("MORE", "LESS"), labels = c(MORE = "More", LESS = "Less")) + 
+  scale_color_manual(values = c("#080808", "#e0e0e0"), limits = c("MORE", "LESS"), labels = c(MORE = "More", LESS = "Less")) + 
   xlab("Log-transformed value difference (right - left)") + 
   ylab("Probability of choosing right option") + 
-  labs(lty = "BlockCond") + theme_classic(base_size = 22, base_line_size = 1) + 
-  guides(shape = guide_legend(title = "Frame", order = 1), lty = guide_legend(title = "", order = 2), alpha = "none") + 
+  theme_classic(base_size = 22, base_line_size = 1) + 
+  guides(linetype = guide_legend(title = "Frame", order = 1), color = guide_legend(title = "", order = 2), alpha = "none") + 
   theme(legend.position = c(0.95, 0.5), 
         legend.background = element_rect(fill = "transparent"),
         legend.title = element_text(size = 16),
         legend.text = element_text(size = 16), 
         axis.text = element_text(face = "bold"), 
-        plot.margin = unit(c(20, 10, 10, 20), "mm")) -> p1
+        plot.margin = unit(c(20, 10, 10, 10), "mm")) -> p1
+
+## Confidence
+pred_conf <- ggpredict(fit_conf, terms = c("Baseline", "LogDiff", "BlockCond"))
+pred_conf$facet <- factor(pred_conf$facet, levels = c("MORE", "LESS"))
+ggplot(pred_conf, aes(x, predicted, color = group)) + 
+  geom_point(position = position_jitterdodge(seed = 1), size = 4) + 
+  geom_linerange(aes(ymin = conf.low, ymax = conf.high), linewidth = 1.5, position = position_jitterdodge(seed = 1)) + 
+  facet_wrap(~ facet, labeller = labeller(facet = c(MORE = "More", LESS = "Less"))) + 
+  theme_classic(base_size = 22, base_line_size = 1) + scale_color_grey() +
+  xlab("Baseline level") + ylab("Predicted confidence") + 
+  scale_x_discrete(labels = c("50", "100" ,"150")) + 
+  guides(color = guide_legend("Value difference")) + 
+  theme(legend.position = c(0.4, 0.2), 
+        legend.title = element_text(size = 16),
+        legend.text = element_text(size = 16), 
+        axis.text = element_text(face = "bold"), 
+        plot.margin = unit(c(20, 10, 10, 10), "mm")) -> p2
 
 ## AIC
 AIC_diff_sum_more <- round(AIC(m1_randi, m2_randi, m3_randi, m4_randi, 
@@ -201,22 +228,20 @@ rbind(AIC_diff_sum_more[which(AIC_diff_sum_more$AIC == min(AIC_diff_sum_more$AIC
       AIC_diff_sum_less[which(AIC_diff_sum_less$AIC == min(AIC_diff_sum_less$AIC)), ], 
       AIC_chosen_unchosen_more[which(AIC_chosen_unchosen_more$AIC == min(AIC_chosen_unchosen_more$AIC)), ], 
       AIC_chosen_unchosen_less[which(AIC_chosen_unchosen_less$AIC == min(AIC_chosen_unchosen_less$AIC)), ]) %>% 
-  mutate(AIC = (AIC - 9000), 
-         frame = rep(c("more", "less"), 2), 
+  mutate(frame = rep(c("more", "less"), 2), 
          rule = c(rep("ds", 2), rep("ch", 2))) %>% 
-  ggplot(aes(x = frame, y = AIC, fill = rule)) + 
-  geom_bar(color = "black", stat  = "identity", position = position_dodge(0.7), width = 0.7) + 
+  ggplot(aes(x = frame, y = AIC)) + 
+  geom_point(aes(shape = rule), size = 5) + 
   scale_x_discrete(limits = c("more", "less"), labels = c(more = "More", less = "Less")) + 
-  scale_y_continuous(breaks = seq(0, 800, 200), limits = c(0, 800), expand = c(0, 0)) + 
-  scale_fill_manual(values = c("#ffffff", "#909090"), labels = c(ch = "Chosen-unchosen", ds = "Diff-sum")) + 
-  guides(fill = guide_legend(title = "Rule")) + 
-  xlab("Frame") + ylab("AIC score (relative to 9000)") + 
+  scale_shape_manual(values = c(5, 8), labels = c(ch = "Chosen-unchosen", ds = "Diff-sum")) + 
+  guides(shape = guide_legend(title = "Rule")) + 
+  xlab("Frame") + ylab("AIC") + 
   theme_classic(base_size = 22, base_line_size = 1) + 
   theme(axis.text = element_text(face = "bold"), 
         legend.position = c(0.3, 0.85),
         legend.title = element_text(size = 16),
         legend.text = element_text(size = 16),
-        plot.margin = unit(c(20, 10, 10, 20), "mm")) -> p2
+        plot.margin = unit(c(10, 10, 10, 10), "mm")) -> p3
 
 ## LMMs
 data.frame(Coefficient = c(summary(bestFit_more)$coef[1:4, 1], 
@@ -243,6 +268,7 @@ ggplot(df_coef, aes(x = Variable, y = Coefficient, fill = Condition)) +
         legend.position = c(0.8, 0.8),
         legend.title = element_text(size = 16),
         legend.text = element_text(size = 16),
-        plot.margin = unit(c(10, 50, 5, 20), "mm")) -> p3
+        plot.margin = unit(c(10, 10, 10, 10), "mm")) -> p4
 
-plot_grid(plot_grid(p1, p2, align = "h", labels = c("a", "b"), label_size = 32), p3, nrow = 2, labels = c("", "c"), label_size = 32)
+plot_grid(plot_grid(p1, p2, labels = c("a", "b"), label_size = 32), plot_grid(p3, p4, align = "h", labels = c("c", "d"), label_size = 32), nrow = 2)
+ggsave("figure3.png", width = 1440, height = 1200, units = "px", scale = 3.2)
