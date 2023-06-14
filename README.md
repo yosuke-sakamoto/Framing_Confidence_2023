@@ -3,7 +3,7 @@
  'URL'
  
  `data_behavior.csv` is the behavioral data that was conducted in our study. 
- `.csv` is the behavioral data that was conducted in Sepulveda et al. (2020).
+ `DataFoodFramingNotebook.csv` is the behavioral data that was conducted in Sepulveda et al. (2020).
 `code_behavior.R` is the R script for analyzing `data.behavior.csv`.
 `code_Sepulveda_2020.R` is the R script for analyzing `.csv`.
 
