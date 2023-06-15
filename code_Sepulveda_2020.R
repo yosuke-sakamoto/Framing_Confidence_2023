@@ -4,6 +4,7 @@ library(lme4)
 library(lmerTest)
 library(car)
 library(ggeffects)
+library(fabricatr)
 
 # Import data
 df <- read.csv("DataFoodFramingNotebook.csv", header = TRUE)
