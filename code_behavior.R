@@ -13,9 +13,9 @@ df$LogTot <- scale(df$LogTot)
 df$LogDCE <- scale(df$LogDCE)
 df$LogDICE <- scale(df$LogDICE)
 df$Conf <- scale(df$Conf)
-df <- mutate(df, DiffRL = RVal - LVal, LogDiffRL = LogRVal - LogLVal, 
-             Baseline = if_else(LVal == 50 | RVal == 50, 1, if_else(LVal == 100 | RVal == 100, 2, 3)))
-df$Baseline <- as.factor(df$Baseline)
+
+df <- mutate(df, DiffRL = RVal - LVal, LogDiffRL = LogRVal - LogLVal)
+df <- mutate(df, Baseline = if_else(TotVal <= 110, 0.1, if_else(TotVal <= 220, 0.2, 0.3)))
 df_more <- filter(df, BlockCond == "MORE")
 df_less <- filter(df, BlockCond == "LESS")
 ################################################################################
@@ -35,9 +35,7 @@ t.test(filter(acc, BlockCond == "MORE")$prop,
        filter(acc, BlockCond == "LESS")$prop, var.equal = T)
 ################################################################################
 # Confidence
-fit_conf <- lmer(Conf ~ Baseline + LogDiff + BlockCond +  
-                   Baseline:LogDiff + LogDiff:BlockCond + BlockCond:Baseline + 
-                   (Baseline + LogDiff + BlockCond|id), 
+fit_conf <- lmer(Conf ~ Baseline * BlockCond + (Baseline + BlockCond|id), 
                  data = df, REML = F, control = lmerControl(optimizer = "bobyqa"))
 summary(fit_conf)
 Anova(fit_conf)
@@ -198,16 +196,17 @@ ggplot(df_choice_pred, aes(x = x, y = pred, group = BlockCond)) +
         plot.margin = unit(c(20, 10, 10, 10), "mm")) -> p1
 
 ## Confidence
-pred_conf <- ggpredict(fit_conf, terms = c("Baseline", "LogDiff", "BlockCond"))
-pred_conf$facet <- factor(pred_conf$facet, levels = c("MORE", "LESS"))
+pred_conf <- ggpredict(fit_conf, terms = c("Baseline", "BlockCond"))
+pred_conf$group <- factor(pred_conf$group, levels = c("MORE", "LESS"))
 ggplot(pred_conf, aes(x, predicted, color = group)) + 
-  geom_point(position = position_jitterdodge(seed = 1), size = 4) + 
-  geom_linerange(aes(ymin = conf.low, ymax = conf.high), linewidth = 1.5, position = position_jitterdodge(seed = 1)) + 
-  facet_wrap(~ facet, labeller = labeller(facet = c(MORE = "More", LESS = "Less"))) + 
+  geom_line(linewidth = 1.4) + 
+  geom_ribbon(aes(ymin = conf.low, ymax = conf.high, color = group), alpha = 0.1) + 
   theme_classic(base_size = 22, base_line_size = 1) + scale_color_grey() +
-  xlab("Baseline level") + ylab("Predicted confidence") + 
-  scale_x_discrete(labels = c("50", "100" ,"150")) + 
-  guides(color = guide_legend("Value difference")) + 
+  xlab("Baseline level") + ylab("Estimated mean confidence") + 
+  scale_x_continuous(breaks = c(0.1, 0.2, 0.3), labels = c(50, 100, 150)) + 
+  scale_y_continuous(breaks = seq(-0.5, 0.5, 0.25), limits = c(-0.7, 0.5)) + 
+  scale_color_manual(values = c("#080808", "#e0e0e0"), labels = c("More", "Less")) + 
+  guides(color = guide_legend("Frame")) + 
   theme(legend.position = c(0.4, 0.2), 
         legend.title = element_text(size = 16),
         legend.text = element_text(size = 16), 

@@ -3,37 +3,48 @@ library(tidyverse)
 library(lme4)
 library(lmerTest)
 library(car)
+library(cowplot)
 library(ggeffects)
-library(fabricatr)
 
 # Import data
 df <- read.csv("DataFoodFramingNotebook.csv", header = TRUE)
-df <- select(df, LValue, RValue, ValCh, ValUnCh, ChosenITM, Correct, ChoiceRT, Conf, ConfRT, BlockCond, Part)
-colnames(df) <- c("LVal", "RVal", "DCE",  "DICE", "ChosenITM", "Corr", "ChoiceRT", "Conf", "ConfRT", "BlockCond", "id")
+df <- select(df, LValue, RValue, ValCh, ValUnCh, ChosenITM, Correct, Conf, ConfRT, BlockCond, Part)
+colnames(df) <- c("LVal", "RVal", "DCE",  "DICE", "ChosenITM", "Corr", "Conf", "ConfRT", "BlockCond", "id")
 df$BlockCond <- if_else(df$BlockCond == 1, "like", "dislike")
+df <- mutate(df, DiffRL = RVal - LVal)
 df$DiffVal <- abs(df$LVal - df$RVal)
 df$TotVal <- df$LVal + df$RVal
-df$TotVal <- round(df$TotVal)
 df$zDiffVal <- scale(df$DiffVal)
 df$zTotVal <- scale(df$TotVal)
 df$zDCE <- scale(df$DCE)
 df$zDICE <- scale(df$DICE)
-df$zChoiceRT <- scale(df$ChoiceRT)
 df$zConf <- scale(df$Conf)
 
-df$zTotVal <- split_quantile(df$zTotVal, 2)
+df <- filter(df, DiffVal != 0)
 
 df_like <- filter(df, BlockCond == "like")
 df_dislike <- filter(df, BlockCond == "dislike")
 ################################################################################
+# Choice probability
+fit_choice <- glmer(ChosenITM ~ DiffRL * BlockCond + 
+                      (DiffRL + BlockCond|id), data = df, 
+                    family = "binomial", 
+                    control = glmerControl(optimizer = "bobyqa"))
+summary(fit_choice)
+Anova(fit_choice)
+
+# Accuracy between conditions
+df %>% 
+  group_by(id, BlockCond) %>% 
+  summarise(n = n(), prop = sum(Corr) / n) -> acc
+t.test(filter(acc, BlockCond == "like")$prop, 
+       filter(acc, BlockCond == "dislike")$prop, var.equal = T)
+################################################################################
 # Confidence
-fit_conf <- lmer(zConf ~ zTotVal + zDiffVal + BlockCond +  
-                   zTotVal:zDiffVal + zDiffVal:BlockCond + BlockCond:zTotVal + 
-                   (zTotVal + zDiffVal + BlockCond|id), 
+fit_conf <- lmer(zConf ~ zTotVal * BlockCond +(zTotVal + BlockCond|id), 
                  data = df, REML = F, control = lmerControl(optimizer = "bobyqa"))
 summary(fit_conf)
 Anova(fit_conf)
-plot(ggpredict(fit_conf, terms= c("zTotVal", "zDiffVal", "BlockCond")))
 ################################################################################
 # Model comparison
 ## Like frame
@@ -114,22 +125,60 @@ summary(bestFit_like)
 summary(bestFit_dislike)
 ################################################################################
 # Plot figures
-## Confidence
-pred_conf <- ggpredict(fit_conf, terms = c("zTotVal", "zDiffVal", "BlockCond"))
-pred_conf$facet <- factor(pred_conf$facet, levels = c("like", "dislike"))
-ggplot(pred_conf, aes(x, predicted, color = group)) + 
-  geom_point(position = position_jitterdodge(seed = 1), size = 4) + 
-  geom_linerange(aes(ymin = conf.low, ymax = conf.high), linewidth = 1.5, position = position_jitterdodge(seed = 1)) + 
-  facet_wrap(~ facet, labeller = labeller(facet = c(like = "Like", dislike = "Dislike"))) + 
-  theme_classic(base_size = 22, base_line_size = 1) + scale_color_grey() +
-  xlab("Summed value") + ylab("Predicted confidence") + 
-  scale_x_discrete(labels = c("Low", "High")) + 
-  guides(color = guide_legend("Value difference")) + 
-  theme(legend.position = c(0.4, 0.2), 
+## Choice probability
+coef <- summary(fit_choice)$coef[, 1]
+choice_pred <- function(x, c){
+  return(1 / (1 + exp(-(coef[1] + coef[2] * x + coef[3] * c + coef[4] * x * c))))
+}
+df_choice_pred <- data.frame(x = runif(10000, -4.5, 4.5), 
+                             c = c(rep(1, 5000), rep(0, 5000)))
+df_choice_pred <- mutate(df_choice_pred, pred = choice_pred(x, c), 
+                         BlockCond = ifelse(c == 0, "Like", "Dislike"))
+
+df %>%  
+  mutate(DiffRL = round(DiffRL, 4)) %>% 
+  select(DiffRL, ChosenITM, BlockCond) %>% 
+  group_by(DiffRL, BlockCond) %>% 
+  summarise(p = sum(ChosenITM) / n(), n = n()) %>% 
+  as.data.frame() -> df_choice_mean
+df_choice_mean <- filter(df_choice_mean, n > 5)
+
+ggplot(df_choice_pred, aes(x = x, y = pred, group = BlockCond)) + 
+  geom_line(aes(linetype = BlockCond), linewidth = 1.3) + 
+  geom_point(df_choice_mean, mapping = aes(x = DiffRL, y = p, color = BlockCond), size = 2.5) + 
+  scale_x_continuous(breaks = seq(-4, 4, 1), limits = c(-4, 4), 
+                     expand = c(0, 0)) + 
+  scale_y_continuous(limits = c(-0.01, 1.01), expand = c(0, 0)) + 
+  scale_linetype_discrete(labels = c("Like", "Dislike")) + 
+  scale_color_manual(values = c("#080808", "#e0e0e0"), limits = c("like", "dislike"), labels = c(like = "Like", dislike = "Dislike")) + 
+  xlab("Value difference (right - left)") + 
+  ylab("Probability of choosing right option") + 
+  theme_classic(base_size = 22, base_line_size = 1) + 
+  guides(linetype = guide_legend(title = "Frame", order = 1), color = guide_legend(title = "", order = 2), alpha = "none") + 
+  theme(legend.position = c(0.95, 0.5), 
+        legend.background = element_rect(fill = "transparent"),
         legend.title = element_text(size = 16),
         legend.text = element_text(size = 16), 
         axis.text = element_text(face = "bold"), 
         plot.margin = unit(c(20, 10, 10, 10), "mm")) -> p1
+
+## Confidence
+pred_conf <- ggpredict(fit_conf, terms = c("zTotVal", "BlockCond"))
+pred_conf$group <- factor(pred_conf$group, levels = c("like", "dislike"))
+ggplot(pred_conf, aes(x, predicted, color = group)) + 
+  geom_line(linewidth = 1.4) + 
+  geom_ribbon(aes(ymin = conf.low, ymax = conf.high, color = group), alpha = 0.1) + 
+  theme_classic(base_size = 22, base_line_size = 1) + scale_color_grey() +
+  xlab("Baseline level") + ylab("Estimated mean confidence") + 
+  xlab("Summed value") + ylab("Estimated mean confidence") + 
+  scale_color_manual(values = c("#080808", "#e0e0e0"), limits = c("like", "dislike"), labels = c(like = "Like", dislike = "Dislike")) + 
+  scale_x_continuous(breaks = seq(-2, 3, 1), limits = c(-2, 3)) + 
+  guides(color = guide_legend("Frame")) + 
+  theme(legend.position = c(0.4, 0.2), 
+        legend.title = element_text(size = 16),
+        legend.text = element_text(size = 16), 
+        axis.text = element_text(face = "bold"), 
+        plot.margin = unit(c(20, 10, 10, 10), "mm")) -> p2
 
 ## AIC
 AIC_diff_sum_like <- round(AIC(m1_randi, m2_randi, m3_randi, m4_randi, 
@@ -150,7 +199,7 @@ rbind(AIC_diff_sum_like[which(AIC_diff_sum_like$AIC == min(AIC_diff_sum_like$AIC
   ggplot(aes(x = frame, y = AIC)) + 
   geom_point(aes(shape = rule), size = 5) + 
   scale_x_discrete(limits = c("like", "dislike"), labels = c(like = "Like", dislike = "Dislike")) + 
-  scale_y_continuous(breaks = seq(9200, 10200, 200), limits = c(9200, 10200)) + 
+  scale_y_continuous(breaks = seq(8000, 9000, 200), limits = c(8000, 9000)) + 
   scale_shape_manual(values = c(5, 8), labels = c(ch = "Chosen-unchosen", ds = "Diff-sum")) + 
   guides(shape = guide_legend(title = "Rule")) + 
   xlab("Frame") + ylab("AIC") + 
@@ -159,7 +208,7 @@ rbind(AIC_diff_sum_like[which(AIC_diff_sum_like$AIC == min(AIC_diff_sum_like$AIC
         legend.position = c(0.3, 0.85),
         legend.title = element_text(size = 16),
         legend.text = element_text(size = 16),
-        plot.margin = unit(c(30, 10, 10, 10), "mm")) -> p2
+        plot.margin = unit(c(10, 10, 10, 10), "mm")) -> p3
 
 ## Hierarchical linear regressions
 data.frame(Coefficient = c(summary(bestFit_like)$coef[1:4, 1], 
@@ -186,7 +235,8 @@ ggplot(df_coef, aes(x = Variable, y = Coefficient, fill = Condition)) +
         legend.position = c(0.8, 0.8),
         legend.title = element_text(size = 16),
         legend.text = element_text(size = 16),
-        plot.margin = unit(c(10, 80, 10, 60), "mm")) -> p3
+        plot.margin = unit(c(10, 10, 10, 10), "mm")) -> p4
 
-plot_grid(plot_grid(p1, p2, labels = c("a", "b"), label_size = 32), p3, labels = c("", "c"), label_size = 32, nrow = 2)
+plot_grid(plot_grid(p1, p2, labels = c("a", "b"), label_size = 32), 
+          plot_grid(p3, p4, align = "h", labels = c("c", "d"), label_size = 32), nrow = 2)
 ggsave("figure4.png", width = 1440, height = 1200, units = "px", scale = 3.2)
