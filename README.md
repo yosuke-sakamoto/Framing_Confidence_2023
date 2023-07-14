@@ -1,8 +1,9 @@
 # Framing_Confidence_2023
- This repository contains the behavioral data and code for "A Confidence Framing Effect: Flexible Use of Evidence in Metacognitive Monitoring"
+ This repository contains the behavioral data and code for "A Confidence Framing Effect: Flexible Use of Evidence in Metacognitive Monitoring", available on PsyArXiv (https://psyarxiv.com/mpt3e/).
+
  
  `data_behavior.csv` is the behavioral data that was conducted in our study. 
- `DataFoodFramingNotebook.csv` is the behavioral data that was conducted in Sepulveda et al. (2020).
+ `DataFoodFramingNotebook.csv` is the behavioral data that was conducted in Sepulveda et al. (2020), available on GitHub (https://github.com/BDMLab/Sepulveda_et_al_2020).
 `code_behavior.R` is the R script for analyzing `data.behavior.csv`.
 `code_Sepulveda_2020.R` is the R script for analyzing `DataFoodFramingNotebook.csv`.
 
