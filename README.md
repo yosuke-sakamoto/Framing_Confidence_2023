@@ -1,5 +1,5 @@
 # Framing_Confidence_2023
- This repository contains the behavioral data and code for "Framing effect on confidence: Flexible control of metacognitive behavior with a goal-directed heuristic"
+ This repository contains the behavioral data and code for "A Confidence Framing Effect: Flexible Use of Evidence in Metacognitive Monitoring"
  
  `data_behavior.csv` is the behavioral data that was conducted in our study. 
  `DataFoodFramingNotebook.csv` is the behavioral data that was conducted in Sepulveda et al. (2020).
