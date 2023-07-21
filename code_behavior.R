@@ -6,12 +6,12 @@ library(car)
 library(cowplot)
 library(ggeffects)
 
-# Import data
+# Import data (variables are standardized)
 df <- read.csv("data_behavior.csv", header = TRUE)
 df$LogDiff <- scale(df$LogDiff)
 df$LogTot <- scale(df$LogTot)
-df$LogDCE <- scale(df$LogDCE)
-df$LogDICE <- scale(df$LogDICE)
+df$LogChVal <- scale(df$DCE)
+df$LogUnChVal <- scale(df$DICE)
 df$Conf <- scale(df$Conf)
 
 df <- mutate(df, DiffRL = RVal - LVal, LogDiffRL = LogRVal - LogLVal)
@@ -27,19 +27,21 @@ fit_choice <- glmer(ChosenITM ~ LogDiffRL * BlockCond +
 summary(fit_choice)
 Anova(fit_choice)
 
-# Accuracy between conditions
-df %>% 
-  group_by(id, BlockCond) %>% 
-  summarise(n = n(), prop = sum(Corr) / n) -> acc
-t.test(filter(acc, BlockCond == "MORE")$prop, 
-       filter(acc, BlockCond == "LESS")$prop, var.equal = T)
-################################################################################
+# Accuracy
+fit_corr <- glmer(Corr ~ LogDiff + Baseline + BlockCond + 
+                    LogDiff:Baseline + Baseline:BlockCond + BlockCond:LogDiff + 
+                    (LogDiff + Baseline + BlockCond|id), data = df, 
+                  family = "binomial", 
+                  control = glmerControl(optimizer = "bobyqa"))
+summary(fit_corr)
+Anova(fit_corr)
+
 # Confidence
 fit_conf <- lmer(Conf ~ Baseline * BlockCond + (Baseline + BlockCond|id), 
                  data = df, REML = F, control = lmerControl(optimizer = "bobyqa"))
 summary(fit_conf)
 Anova(fit_conf)
-################################################################################
+
 # Model comparison
 ## More frame
 ### No random slopes
@@ -51,13 +53,13 @@ m3_randi <- lmer(Conf ~ LogDiff + LogTot + (1|id), data = df_more, REML = F,
                  control = lmerControl(optimizer = "nlminbwrap"))
 m4_randi <- lmer(Conf ~ LogDiff * LogTot + (1|id), data = df_more, REML = F, 
                  control = lmerControl(optimizer = "nlminbwrap"))
-m5_randi <- lmer(Conf ~ LogDCE + (1|id), data = df_more, REML = F, 
+m5_randi <- lmer(Conf ~ LogChVal + (1|id), data = df_more, REML = F, 
                  control = lmerControl(optimizer = "nlminbwrap"))
-m6_randi <- lmer(Conf ~ LogDICE + (1|id), data = df_more, REML = F, 
+m6_randi <- lmer(Conf ~ LogUnChVal + (1|id), data = df_more, REML = F, 
                  control = lmerControl(optimizer = "nlminbwrap"))
-m7_randi <- lmer(Conf ~ LogDCE + LogDICE + (1|id), data = df_more, REML = F, 
+m7_randi <- lmer(Conf ~ LogChVal + LogUnChVal + (1|id), data = df_more, REML = F, 
                  control = lmerControl(optimizer = "nlminbwrap"))
-m8_randi <- lmer(Conf ~ LogDCE * LogDICE + (1|id), data = df_more, REML = F, 
+m8_randi <- lmer(Conf ~ LogChVal * LogUnChVal + (1|id), data = df_more, REML = F, 
                  control = lmerControl(optimizer = "nlminbwrap"))
 
 ### Random slopes
@@ -71,14 +73,14 @@ m3_rands <- lmer(Conf ~ LogDiff + LogTot + (1 + LogDiff + LogTot|id),
 m4_rands <- lmer(Conf ~ LogDiff * LogTot + (1 +  LogDiff + LogTot|id), 
                  data = df_more, REML = F, 
                  control = lmerControl(optimizer = "nlminbwrap"))
-m5_rands <- lmer(Conf ~ LogDCE + (1 + LogDCE|id), data = df_more, REML = F, 
+m5_rands <- lmer(Conf ~ LogChVal + (1 + LogChVal|id), data = df_more, REML = F, 
                  control = lmerControl(optimizer = "nlminbwrap"))
-m6_rands <- lmer(Conf ~ LogDICE + (1 + LogDICE|id), data = df_more, REML = F, 
+m6_rands <- lmer(Conf ~ LogUnChVal + (1 + LogUnChVal|id), data = df_more, REML = F, 
                  control = lmerControl(optimizer = "nlminbwrap"))
-m7_rands <- lmer(Conf ~ LogDCE + LogDICE + (1 + LogDCE + LogDICE|id), 
+m7_rands <- lmer(Conf ~ LogChVal + LogUnChVal + (1 + LogChVal + LogUnChVal|id), 
                  data = df_more, REML = F, 
                  control = lmerControl(optimizer = "nlminbwrap"))
-m8_rands <- lmer(Conf ~ LogDCE * LogDICE + (1 + LogDCE + LogDICE|id), 
+m8_rands <- lmer(Conf ~ LogChVal * LogUnChVal + (1 + LogChVal + LogUnChVal|id), 
                  data = df_more, REML = F, 
                  control = lmerControl(optimizer = "nlminbwrap"))
 
@@ -106,13 +108,13 @@ l3_randi <- lmer(Conf ~ LogDiff + LogTot + (1|id), data = df_less, REML = F,
                  control = lmerControl(optimizer = "nlminbwrap"))
 l4_randi <- lmer(Conf ~ LogDiff * LogTot + (1|id), data = df_less, REML = F, 
                  control = lmerControl(optimizer = "nlminbwrap"))
-l5_randi <- lmer(Conf ~ LogDCE + (1|id), data = df_less, REML = F, 
+l5_randi <- lmer(Conf ~ LogChVal + (1|id), data = df_less, REML = F, 
                  control = lmerControl(optimizer = "nlminbwrap"))
-l6_randi <- lmer(Conf ~ LogDICE + (1|id), data = df_less, REML = F, 
+l6_randi <- lmer(Conf ~ LogUnChVal + (1|id), data = df_less, REML = F, 
                  control = lmerControl(optimizer = "nlminbwrap"))
-l7_randi <- lmer(Conf ~ LogDCE + LogDICE + (1|id), data = df_less, REML = F, 
+l7_randi <- lmer(Conf ~ LogChVal + LogUnChVal + (1|id), data = df_less, REML = F, 
                  control = lmerControl(optimizer = "nlminbwrap"))
-l8_randi <- lmer(Conf ~ LogDCE * LogDICE + (1|id), data = df_less, REML = F, 
+l8_randi <- lmer(Conf ~ LogChVal * LogUnChVal + (1|id), data = df_less, REML = F, 
                  control = lmerControl(optimizer = "nlminbwrap"))
 
 ### Random slopes
@@ -126,14 +128,14 @@ l3_rands <- lmer(Conf ~ LogDiff + LogTot + (1 + LogDiff + LogTot|id),
 l4_rands <- lmer(Conf ~ LogDiff * LogTot + (1 +  LogDiff + LogTot|id), 
                  data = df_less, REML = F, 
                  control = lmerControl(optimizer = "nlminbwrap"))
-l5_rands <- lmer(Conf ~ LogDCE + (1 + LogDCE|id), data = df_less, REML = F, 
+l5_rands <- lmer(Conf ~ LogChVal + (1 + LogChVal|id), data = df_less, REML = F, 
                  control = lmerControl(optimizer = "nlminbwrap"))
-l6_rands <- lmer(Conf ~ LogDICE + (1 + LogDICE|id), data = df_less, REML = F, 
+l6_rands <- lmer(Conf ~ LogUnChVal + (1 + LogUnChVal|id), data = df_less, REML = F, 
                  control = lmerControl(optimizer = "nlminbwrap"))
-l7_rands <- lmer(Conf ~ LogDCE + LogDICE + (1 + LogDCE + LogDICE|id), 
+l7_rands <- lmer(Conf ~ LogChVal + LogUnChVal + (1 + LogChVal + LogUnChVal|id), 
                  data = df_less, REML = F, 
                  control = lmerControl(optimizer = "nlminbwrap"))
-l8_rands <- lmer(Conf ~ LogDCE * LogDICE + (1 + LogDCE + LogDICE|id), 
+l8_rands <- lmer(Conf ~ LogChVal * LogUnChVal + (1 + LogChVal + LogUnChVal|id), 
                  data = df_less, REML = F, 
                  control = lmerControl(optimizer = "nlminbwrap"))
 
@@ -269,5 +271,26 @@ ggplot(df_coef, aes(x = Variable, y = Coefficient, fill = Condition)) +
         legend.text = element_text(size = 16),
         plot.margin = unit(c(10, 10, 10, 10), "mm")) -> p4
 
-plot_grid(plot_grid(p1, p2, labels = c("a", "b"), label_size = 32), plot_grid(p3, p4, align = "h", labels = c("c", "d"), label_size = 32), nrow = 2)
-ggsave("figure3.png", width = 1440, height = 1200, units = "px", scale = 3.2)
+## Aggregate multiple plots
+plot_grid(plot_grid(p1, p2, labels = c("a", "b"), label_size = 32), 
+          plot_grid(p3, p4, align = "h", labels = c("c", "d"), label_size = 32), nrow = 2)
+ggsave("Figure3.png", width = 1440, height = 1200, units = "px", scale = 3.2)
+ggsave("Figure3.pdf", width = 1440, height = 1200, units = "px", scale = 3.2)
+
+## Accuracy (for Appendix C)
+pred_corr <- ggpredict(fit_corr, terms = c("LogDiff", "BlockCond", "Baseline"))
+pred_corr$group <- factor(pred_corr$group, levels = c("MORE", "LESS"))
+levels(pred_corr$facet) <- c(50, 100, 150)
+ggplot(pred_corr, aes(x = x, y = predicted, group = group)) + 
+  geom_line(linewidth = 1.4, aes(linetype = group)) + 
+  geom_ribbon(aes(ymin = conf.low, ymax = conf.high, color = group), alpha = 0.1) + 
+  facet_wrap(.~facet) + 
+  theme_classic(base_size = 22, base_line_size = 1) + scale_color_grey() +
+  xlab("Log-transformed value difference") + ylab("Accuracy") + 
+  scale_y_continuous(breaks = seq(0.4, 1, 0.2), limits = c(0.3, 1)) + 
+  scale_linetype_manual(name = "", values = c(1, 2), labels = c("More", "Less")) + 
+  guides(linetype = guide_legend("Frame"), color = "none") + 
+  theme(legend.position = c(0.5, 0.2), 
+        legend.title = element_text(size = 16),
+        legend.text = element_text(size = 16), 
+        axis.text = element_text(face = "bold")) -> p_appx1
