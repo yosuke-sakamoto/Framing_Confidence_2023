@@ -8,7 +8,7 @@
  `DataFoodFramingNotebook.csv` and `DataPerceptualFramingNotebook.csv` are the behavioral data that were conducted in Sepulveda et al. (2020), available on GitHub (https://github.com/BDMLab/Sepulveda_et_al_2020).
 
 
- `code_behavior.R` is the R script for analyzing `data.behavior.csv`.
+ `code_behavior.R` is the R script for analyzing `data_behavior.csv`.
 
 
  `code_value_Sepulveda.R` is the R script for analyzing `DataFoodFramingNotebook.csv`.
