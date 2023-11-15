@@ -7,20 +7,20 @@ library(cowplot)
 library(ggeffects)
 
 # Import data (variables are standardized)
-df <- read.csv("data_behavior.csv", header = TRUE)
-
-## Check mean RT and confidence for each frame
-group_by(df, BlockCond) %>% 
-  summarise(MeanAcc = mean(Corr), MeanRT= mean(ChoiceRT), MeanConf = mean(Conf))
-
+df <- read.csv("DataPerceptualFramingNotebook.csv", header = TRUE)
+df <- mutate(df, LogDiff = log(absDV), LogTot = log(TotVal), 
+             ValCh = if_else(ChosenITM == 0, LValue, RValue), 
+             ValUnCh = if_else(ChosenITM == 0, RValue, LValue), 
+             LogChVal = log(ValCh), LogUnChVal = log(ValUnCh), 
+             Corr = if_else((ValCh > ValUnCh & BlockCond == "MORE" | ValCh < ValUnCh & BlockCond == "LESS"), 1, 0))
+df <- mutate(df, Baseline = if_else(TotVal <= 110, 0.1, if_else(TotVal <= 176, 0.2, 0.3)))
 df$LogDiff <- scale(df$LogDiff)
 df$LogTot <- scale(df$LogTot)
 df$LogChVal <- scale(df$LogChVal)
 df$LogUnChVal <- scale(df$LogUnChVal)
 df$Conf <- scale(df$Conf)
-
-df <- mutate(df, DiffRL = RVal - LVal, LogDiffRL = LogRVal - LogLVal)
-df <- mutate(df, Baseline = if_else(TotVal <= 110, 0.1, if_else(TotVal <= 220, 0.2, 0.3)))
+df <- mutate(df, id = Part)
+df <- mutate(df, DiffRL = RValue - LValue, LogDiffRL = log(RValue) - log(LValue))
 df_more <- filter(df, BlockCond == "MORE")
 df_less <- filter(df, BlockCond == "LESS")
 ################################################################################
@@ -56,43 +56,43 @@ p.adjust(coef_conf$Pr, method = "bonferroni")
 ## More frame
 ### No random slopes
 m1_randi <- lmer(Conf ~ LogDiff + (1|id), data = df_more, REML = F, 
-                 control = lmerControl(optimizer = "nlminbwrap"))
+                 control = lmerControl(optimizer = "bobyqa"))
 m2_randi <- lmer(Conf ~ LogTot + (1|id), data = df_more, REML = F, 
-                 control = lmerControl(optimizer = "nlminbwrap"))
+                 control = lmerControl(optimizer = "bobyqa"))
 m3_randi <- lmer(Conf ~ LogDiff + LogTot + (1|id), data = df_more, REML = F, 
-                 control = lmerControl(optimizer = "nlminbwrap"))
+                 control = lmerControl(optimizer = "bobyqa"))
 m4_randi <- lmer(Conf ~ LogDiff * LogTot + (1|id), data = df_more, REML = F, 
-                 control = lmerControl(optimizer = "nlminbwrap"))
+                 control = lmerControl(optimizer = "bobyqa"))
 m5_randi <- lmer(Conf ~ LogChVal + (1|id), data = df_more, REML = F, 
-                 control = lmerControl(optimizer = "nlminbwrap"))
+                 control = lmerControl(optimizer = "bobyqa"))
 m6_randi <- lmer(Conf ~ LogUnChVal + (1|id), data = df_more, REML = F, 
-                 control = lmerControl(optimizer = "nlminbwrap"))
+                 control = lmerControl(optimizer = "bobyqa"))
 m7_randi <- lmer(Conf ~ LogChVal + LogUnChVal + (1|id), data = df_more, REML = F, 
-                 control = lmerControl(optimizer = "nlminbwrap"))
+                 control = lmerControl(optimizer = "bobyqa"))
 m8_randi <- lmer(Conf ~ LogChVal * LogUnChVal + (1|id), data = df_more, REML = F, 
-                 control = lmerControl(optimizer = "nlminbwrap"))
+                 control = lmerControl(optimizer = "bobyqa"))
 
 ### Random slopes
 m1_rands <- lmer(Conf ~ LogDiff + (1 + LogDiff|id), data = df_more, REML = F, 
-                 control = lmerControl(optimizer = "nlminbwrap"))
+                 control = lmerControl(optimizer = "bobyqa"))
 m2_rands <- lmer(Conf ~ LogTot + (1 + LogTot|id), data = df_more, REML = F, 
-                 control = lmerControl(optimizer = "nlminbwrap"))
+                 control = lmerControl(optimizer = "bobyqa"))
 m3_rands <- lmer(Conf ~ LogDiff + LogTot + (1 + LogDiff + LogTot|id), 
                  data = df_more, REML = F, 
-                 control = lmerControl(optimizer = "nlminbwrap"))
+                 control = lmerControl(optimizer = "bobyqa"))
 m4_rands <- lmer(Conf ~ LogDiff * LogTot + (1 +  LogDiff + LogTot|id), 
                  data = df_more, REML = F, 
-                 control = lmerControl(optimizer = "nlminbwrap"))
+                 control = lmerControl(optimizer = "bobyqa"))
 m5_rands <- lmer(Conf ~ LogChVal + (1 + LogChVal|id), data = df_more, REML = F, 
-                 control = lmerControl(optimizer = "nlminbwrap"))
+                 control = lmerControl(optimizer = "bobyqa"))
 m6_rands <- lmer(Conf ~ LogUnChVal + (1 + LogUnChVal|id), data = df_more, REML = F, 
-                 control = lmerControl(optimizer = "nlminbwrap"))
+                 control = lmerControl(optimizer = "bobyqa"))
 m7_rands <- lmer(Conf ~ LogChVal + LogUnChVal + (1 + LogChVal + LogUnChVal|id), 
                  data = df_more, REML = F, 
-                 control = lmerControl(optimizer = "nlminbwrap"))
+                 control = lmerControl(optimizer = "bobyqa"))
 m8_rands <- lmer(Conf ~ LogChVal * LogUnChVal + (1 + LogChVal + LogUnChVal|id), 
                  data = df_more, REML = F, 
-                 control = lmerControl(optimizer = "nlminbwrap"))
+                 control = lmerControl(optimizer = "bobyqa"))
 
 ### Calculate AIC
 AIC_more <- round(AIC(m1_randi, m2_randi, m3_randi, m4_randi, 
@@ -111,43 +111,43 @@ rownames(BIC_more)[which(BIC_more$BIC == min(BIC_more$BIC))]
 ## Less frame
 ### No random slopes
 l1_randi <- lmer(Conf ~ LogDiff + (1|id), data = df_less, REML = F, 
-                 control = lmerControl(optimizer = "nlminbwrap"))
+                 control = lmerControl(optimizer = "bobyqa"))
 l2_randi <- lmer(Conf ~ LogTot + (1|id), data = df_less, REML = F, 
-                 control = lmerControl(optimizer = "nlminbwrap"))
+                 control = lmerControl(optimizer = "bobyqa"))
 l3_randi <- lmer(Conf ~ LogDiff + LogTot + (1|id), data = df_less, REML = F, 
-                 control = lmerControl(optimizer = "nlminbwrap"))
+                 control = lmerControl(optimizer = "bobyqa"))
 l4_randi <- lmer(Conf ~ LogDiff * LogTot + (1|id), data = df_less, REML = F, 
-                 control = lmerControl(optimizer = "nlminbwrap"))
+                 control = lmerControl(optimizer = "bobyqa"))
 l5_randi <- lmer(Conf ~ LogChVal + (1|id), data = df_less, REML = F, 
-                 control = lmerControl(optimizer = "nlminbwrap"))
+                 control = lmerControl(optimizer = "bobyqa"))
 l6_randi <- lmer(Conf ~ LogUnChVal + (1|id), data = df_less, REML = F, 
-                 control = lmerControl(optimizer = "nlminbwrap"))
+                 control = lmerControl(optimizer = "bobyqa"))
 l7_randi <- lmer(Conf ~ LogChVal + LogUnChVal + (1|id), data = df_less, REML = F, 
-                 control = lmerControl(optimizer = "nlminbwrap"))
+                 control = lmerControl(optimizer = "bobyqa"))
 l8_randi <- lmer(Conf ~ LogChVal * LogUnChVal + (1|id), data = df_less, REML = F, 
-                 control = lmerControl(optimizer = "nlminbwrap"))
+                 control = lmerControl(optimizer = "bobyqa"))
 
 ### Random slopes
 l1_rands <- lmer(Conf ~ LogDiff + (1 + LogDiff|id), data = df_less, 
-                 REML = F, control = lmerControl(optimizer = "nlminbwrap"))
+                 REML = F, control = lmerControl(optimizer = "bobyqa"))
 l2_rands <- lmer(Conf ~ LogTot + (1 + LogTot|id), data = df_less, 
-                 REML = F, control = lmerControl(optimizer = "nlminbwrap"))
+                 REML = F, control = lmerControl(optimizer = "bobyqa"))
 l3_rands <- lmer(Conf ~ LogDiff + LogTot + (1 + LogDiff + LogTot|id), 
                  data = df_less, REML = F, 
-                 control = lmerControl(optimizer = "nlminbwrap"))
+                 control = lmerControl(optimizer = "bobyqa"))
 l4_rands <- lmer(Conf ~ LogDiff * LogTot + (1 +  LogDiff + LogTot|id), 
                  data = df_less, REML = F, 
-                 control = lmerControl(optimizer = "nlminbwrap"))
+                 control = lmerControl(optimizer = "bobyqa"))
 l5_rands <- lmer(Conf ~ LogChVal + (1 + LogChVal|id), data = df_less, REML = F, 
-                 control = lmerControl(optimizer = "nlminbwrap"))
+                 control = lmerControl(optimizer = "bobyqa"))
 l6_rands <- lmer(Conf ~ LogUnChVal + (1 + LogUnChVal|id), data = df_less, REML = F, 
-                 control = lmerControl(optimizer = "nlminbwrap"))
+                 control = lmerControl(optimizer = "bobyqa"))
 l7_rands <- lmer(Conf ~ LogChVal + LogUnChVal + (1 + LogChVal + LogUnChVal|id), 
                  data = df_less, REML = F, 
-                 control = lmerControl(optimizer = "nlminbwrap"))
+                 control = lmerControl(optimizer = "bobyqa"))
 l8_rands <- lmer(Conf ~ LogChVal * LogUnChVal + (1 + LogChVal + LogUnChVal|id), 
                  data = df_less, REML = F, 
-                 control = lmerControl(optimizer = "nlminbwrap"))
+                 control = lmerControl(optimizer = "bobyqa"))
 
 ### Calculate AIC
 AIC_less <- round(AIC(l1_randi, l2_randi, l3_randi, l4_randi, 
@@ -164,7 +164,7 @@ BIC_less <- round(BIC(l1_randi, l2_randi, l3_randi, l4_randi,
 rownames(BIC_less)[which(BIC_less$BIC == min(BIC_less$BIC))]
 
 # Confidence prediction of winning models
-## `m8_rands` for more frame and and `l8_rands` for less frame
+## `m7_rands` for more frame and and `l7_rands` for less frame
 bestFit_more <- eval(parse(text = bestFit_more))
 bestFit_less <- eval(parse(text = bestFit_less))
 summary(bestFit_more)
@@ -175,7 +175,7 @@ coef_bestFit_less <- as.data.frame(summary(bestFit_less)$coef[-1, ])
 p.adjust(coef_bestFit_less$Pr, method = "bonferroni")
 ################################################################################
 # Plot figures
-## Choice probability (Figure 3a)
+## Choice probability (Figure S6a)
 coef <- summary(fit_choice)$coef[, 1]
 choice_pred <- function(x, c){
   return(1 / (1 + exp(-(coef[1] + coef[2] * x + coef[3] * c + coef[4] * x * c))))
@@ -209,9 +209,9 @@ ggplot(df_choice_pred, aes(x = x, y = pred, group = BlockCond)) +
         legend.title = element_text(size = 16),
         legend.text = element_text(size = 16), 
         axis.text = element_text(face = "bold"), 
-        plot.margin = unit(c(20, 10, 10, 10), "mm")) -> p1
+        plot.margin = unit(c(20, 10, 10, 10), "mm")) -> ps5a
 
-## Confidence (Figure 3b)
+## Confidence (Figure S6b)
 pred_conf <- ggpredict(fit_conf, terms = c("Baseline", "BlockCond"))
 pred_conf$group <- factor(pred_conf$group, levels = c("MORE", "LESS"))
 ggplot(pred_conf, aes(x, predicted, color = group)) + 
@@ -227,9 +227,9 @@ ggplot(pred_conf, aes(x, predicted, color = group)) +
         legend.title = element_text(size = 16),
         legend.text = element_text(size = 16), 
         axis.text = element_text(face = "bold"), 
-        plot.margin = unit(c(20, 10, 10, 10), "mm")) -> p2
+        plot.margin = unit(c(20, 10, 10, 10), "mm")) -> ps5b
 
-## AIC (Figure 3c)
+## AIC (Figure S6c)
 AIC_diff_sum_more <- round(AIC(m1_randi, m2_randi, m3_randi, m4_randi, 
                                m1_rands, m2_rands, m3_rands, m4_rands), 2)
 AIC_diff_sum_less <- round(AIC(l1_randi, l2_randi, l3_randi, l4_randi, 
@@ -248,6 +248,7 @@ rbind(AIC_diff_sum_more[which(AIC_diff_sum_more$AIC == min(AIC_diff_sum_more$AIC
   ggplot(aes(x = frame, y = AIC)) + 
   geom_point(aes(shape = rule), size = 5) + 
   scale_x_discrete(limits = c("more", "less"), labels = c(more = "More", less = "Less")) + 
+  scale_y_continuous(breaks = seq(9400, 10000, 200), limits = c(9400, 10050)) + 
   scale_shape_manual(values = c(5, 8), labels = c(ch = "Chosen-unchosen", ds = "Diff-sum")) + 
   guides(shape = guide_legend(title = "Rule")) + 
   xlab("Frame") + ylab("AIC") + 
@@ -256,22 +257,22 @@ rbind(AIC_diff_sum_more[which(AIC_diff_sum_more$AIC == min(AIC_diff_sum_more$AIC
         legend.position = c(0.3, 0.85),
         legend.title = element_text(size = 16),
         legend.text = element_text(size = 16),
-        plot.margin = unit(c(10, 10, 10, 10), "mm")) -> p3
+        plot.margin = unit(c(10, 10, 10, 10), "mm")) -> ps5c
 
-## Hierarchical linear regressions (Figure 3d)
-data.frame(Coefficient = c(summary(bestFit_more)$coef[1:4, 1], 
-                           summary(bestFit_less)$coef[1:4, 1]), 
-           SEM = c(summary(bestFit_more)$coef[1:4, 2], 
-                   summary(bestFit_less)$coef[1:4, 2])) %>% 
-  mutate(Variable = rep(c("Intercept", "Chosen", "Unchosen", "Chosen*Unchosen"), 2), 
-         Condition = c(rep("MORE", 4), rep("LESS", 4))) %>% 
+## Hierarchical linear regressions (Figure S6d)
+data.frame(Coefficient = c(summary(bestFit_more)$coef[1:3, 1], 
+                           summary(bestFit_less)$coef[1:3, 1]), 
+           SEM = c(summary(bestFit_more)$coef[1:3, 2], 
+                   summary(bestFit_less)$coef[1:3, 2])) %>% 
+  mutate(Variable = rep(c("Intercept", "Chosen", "Unchosen"), 2), 
+         Condition = c(rep("MORE", 3), rep("LESS", 3))) %>% 
   ggplot(aes(x = Variable, y = Coefficient, fill = Condition)) + 
   geom_hline(yintercept = 0) + 
   geom_bar(stat = "identity", position = "dodge") + 
   geom_errorbar(aes(ymin = Coefficient - SEM, ymax = Coefficient + SEM), 
                 linewidth = 1.1, width = 0.2, position = position_dodge(0.9), 
                 color = "#7d7d7d") + 
-  scale_x_discrete(limit = c("Chosen", "Unchosen", "Chosen*Unchosen", "Intercept")) + 
+  scale_x_discrete(limit = c("Chosen", "Unchosen", "Intercept")) + 
   scale_y_continuous(breaks = seq(-1.5, 1.5, 0.5), limits =  c(-1.5, 1.5)) + 
   scale_fill_manual(values = c("#080808", "#e0e0e0"), 
                     limits = c("MORE", "LESS"), 
@@ -283,28 +284,10 @@ data.frame(Coefficient = c(summary(bestFit_more)$coef[1:4, 1],
         legend.position = c(0.8, 0.8),
         legend.title = element_text(size = 16),
         legend.text = element_text(size = 16),
-        plot.margin = unit(c(10, 10, 10, 10), "mm")) -> p4
+        plot.margin = unit(c(10, 10, 10, 10), "mm")) -> ps5d
 
-## Aggregate multiple plots (Figure 3)
-plot_grid(plot_grid(p1, p2, labels = c("a", "b"), label_size = 32), 
-          plot_grid(p3, p4, align = "h", labels = c("c", "d"), label_size = 32), nrow = 2)
-ggsave("Figure3.png", width = 1440, height = 1200, units = "px", scale = 3.2)
-ggsave("Figure3.pdf", width = 1440, height = 1200, units = "px", scale = 3.2)
-
-## Accuracy (Figure C in Appendix C)
-pred_corr <- ggpredict(fit_corr, terms = c("LogDiff", "BlockCond", "Baseline"))
-pred_corr$group <- factor(pred_corr$group, levels = c("MORE", "LESS"))
-levels(pred_corr$facet) <- c(50, 100, 150)
-ggplot(pred_corr, aes(x = x, y = predicted, group = group)) + 
-  geom_line(linewidth = 1.4, aes(linetype = group)) + 
-  geom_ribbon(aes(ymin = conf.low, ymax = conf.high, color = group), alpha = 0.1) + 
-  facet_wrap(.~facet) + 
-  theme_classic(base_size = 22, base_line_size = 1) + scale_color_grey() +
-  xlab("Difference of log-transformed values") + ylab("Accuracy") + 
-  scale_y_continuous(breaks = seq(0.4, 1, 0.2), limits = c(0.3, 1)) + 
-  scale_linetype_manual(name = "", values = c(1, 2), labels = c("More", "Less")) + 
-  guides(linetype = guide_legend("Frame"), color = "none") + 
-  theme(legend.position = c(0.5, 0.2), 
-        legend.title = element_text(size = 16),
-        legend.text = element_text(size = 16), 
-        axis.text = element_text(face = "bold")) -> p_appx1
+## Aggregate multiple plots (Figure S6)
+plot_grid(plot_grid(ps5a, ps5b, labels = c("a", "b"), label_size = 32), 
+          plot_grid(ps5c, ps5d, align = "h", labels = c("c", "d"), label_size = 32), nrow = 2)
+ggsave("FigureS6.png", width = 1440, height = 1200, units = "px", scale = 3.2)
+ggsave("FigureS6.pdf", width = 1440, height = 1200, units = "px", scale = 3.2)

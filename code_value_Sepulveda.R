@@ -6,21 +6,20 @@ library(car)
 library(cowplot)
 library(ggeffects)
 
-# Import data
+# Import data (variables are standardized)
 df <- read.csv("DataFoodFramingNotebook.csv", header = TRUE)
-df <- select(df, LValue, RValue, ValCh, ValUnCh, ChosenITM, Correct, Conf, ConfRT, BlockCond, Part)
-colnames(df) <- c("LVal", "RVal", "ChVal",  "UnChVal", "ChosenITM", "Corr", "Conf", "ConfRT", "BlockCond", "id")
+df <- select(df, LValue, RValue, ValCh, ValUnCh, ChosenITM, Correct, ChoiceRT, Conf, ConfRT, BlockCond, Part)
+colnames(df) <- c("LVal", "RVal", "ChVal",  "UnChVal", "ChosenITM", "Corr", "ChoiceRT", "Conf", "ConfRT", "BlockCond", "id")
 df$BlockCond <- if_else(df$BlockCond == 1, "like", "dislike")
 df <- mutate(df, DiffRL = RVal - LVal)
 df$DiffVal <- abs(df$LVal - df$RVal)
+df <- subset(df, DiffVal != 0)
 df$TotVal <- df$LVal + df$RVal
-df$zDiffVal <- scale(df$DiffVal)
-df$zTotVal <- scale(df$TotVal)
-df$zChVal <- scale(df$ChVal)
-df$zUnChVal <- scale(df$UnChVal)
-df$zConf <- scale(df$Conf)
-
-df <- filter(df, DiffVal != 0)
+df$DiffVal <- scale(df$DiffVal)
+df$TotVal <- scale(df$TotVal)
+df$ChVal <- scale(df$ChVal)
+df$UnChVal <- scale(df$UnChVal)
+df$Conf <- scale(df$Conf)
 
 df_like <- filter(df, BlockCond == "like")
 df_dislike <- filter(df, BlockCond == "dislike")
@@ -32,43 +31,64 @@ fit_choice <- glmer(ChosenITM ~ DiffRL * BlockCond +
                     control = glmerControl(optimizer = "bobyqa"))
 summary(fit_choice)
 Anova(fit_choice)
+coef_choice <- as.data.frame(summary(fit_choice)$coef[-1, ])
+p.adjust(coef_choice$Pr, method = "bonferroni")
 
-# Accuracy (see Appendix C)
-fit_corr <- glmer(Corr ~ zDiffVal + zTotVal + BlockCond + 
-                    zDiffVal:zTotVal + zTotVal:BlockCond + BlockCond:zDiffVal + 
-                    (zDiffVal + zTotVal + BlockCond|id), data = df, 
+# Accuracy
+fit_corr <- glmer(Corr ~ DiffVal + TotVal + BlockCond + 
+                    DiffVal:TotVal + TotVal:BlockCond + BlockCond:DiffVal + 
+                    (DiffVal + TotVal + BlockCond|id), data = df, 
                   family = "binomial", 
                   control = glmerControl(optimizer = "bobyqa"))
 summary(fit_corr)
 Anova(fit_corr)
+p.adjust(Anova(fit_corr)$Pr, method = "bonferroni")
 
 # Confidence
-fit_conf <- lmer(zConf ~ zTotVal * BlockCond +(zTotVal + BlockCond|id), 
+fit_conf <- lmer(Conf ~ TotVal * BlockCond +(TotVal + BlockCond|id), 
                  data = df, REML = F, control = lmerControl(optimizer = "bobyqa"))
 summary(fit_conf)
 Anova(fit_conf)
+coef_conf <- as.data.frame(summary(fit_conf)$coef[-1, ])
+p.adjust(coef_conf$Pr, method = "bonferroni")
 
 # Model comparison
 ## Like frame
 ### No random slopes
-m1_randi <- lmer(zConf ~ zDiffVal + (1|id), data = df_like, REML = F, control = lmerControl(optimizer = "bobyqa"))
-m2_randi <- lmer(zConf ~ zTotVal + (1|id), data = df_like, REML = F, control = lmerControl(optimizer = "bobyqa"))
-m3_randi <- lmer(zConf ~ zDiffVal + zTotVal + (1|id), data = df_like, REML = F, control = lmerControl(optimizer = "bobyqa"))
-m4_randi <- lmer(zConf ~ zDiffVal * zTotVal + (1|id), data = df_like, REML = F, control = lmerControl(optimizer = "bobyqa"))
-m5_randi <- lmer(zConf ~ zChVal + (1|id), data = df_like, REML = F, control = lmerControl(optimizer = "bobyqa"))
-m6_randi <- lmer(zConf ~ zUnChVal + (1|id), data = df_like, REML = F, control = lmerControl(optimizer = "bobyqa"))
-m7_randi <- lmer(zConf ~ zChVal + zUnChVal + (1|id), data = df_like, REML = F, control = lmerControl(optimizer = "bobyqa"))
-m8_randi <- lmer(zConf ~ zChVal * zUnChVal + (1|id), data = df_like, REML = F, control = lmerControl(optimizer = "bobyqa"))
+m1_randi <- lmer(Conf ~ DiffVal + (1|id), data = df_like, REML = F, 
+                 control = lmerControl(optimizer = "bobyqa"))
+m2_randi <- lmer(Conf ~ TotVal + (1|id), data = df_like, REML = F, 
+                 control = lmerControl(optimizer = "bobyqa"))
+m3_randi <- lmer(Conf ~ DiffVal + TotVal + (1|id), data = df_like, REML = F, 
+                 control = lmerControl(optimizer = "bobyqa"))
+m4_randi <- lmer(Conf ~ DiffVal * TotVal + (1|id), data = df_like, REML = F, 
+                 control = lmerControl(optimizer = "bobyqa"))
+m5_randi <- lmer(Conf ~ ChVal + (1|id), data = df_like, REML = F, 
+                 control = lmerControl(optimizer = "bobyqa"))
+m6_randi <- lmer(Conf ~ UnChVal + (1|id), data = df_like, REML = F, 
+                 control = lmerControl(optimizer = "bobyqa"))
+m7_randi <- lmer(Conf ~ ChVal + UnChVal + (1|id), data = df_like, REML = F, 
+                 control = lmerControl(optimizer = "bobyqa"))
+m8_randi <- lmer(Conf ~ ChVal * UnChVal + (1|id), data = df_like, REML = F, 
+                 control = lmerControl(optimizer = "bobyqa"))
 
 ### Random slopes
-m1_rands <- lmer(zConf ~ zDiffVal + (1 + zDiffVal|id), data = df_like, REML = F, control = lmerControl(optimizer = "bobyqa"))
-m2_rands <- lmer(zConf ~ zTotVal + (1 + zTotVal|id), data = df_like, REML = F, control = lmerControl(optimizer = "bobyqa"))
-m3_rands <- lmer(zConf ~ zDiffVal + zTotVal + (1 + zDiffVal + zTotVal|id), data = df_like, REML = F, control = lmerControl(optimizer = "bobyqa"))
-m4_rands <- lmer(zConf ~ zDiffVal * zTotVal + (1 +  zDiffVal + zTotVal|id), data = df_like, REML = F, control = lmerControl(optimizer = "bobyqa"))
-m5_rands <- lmer(zConf ~ zChVal + (1 + zChVal|id), data = df_like, REML = F, control = lmerControl(optimizer = "bobyqa"))
-m6_rands <- lmer(zConf ~ zUnChVal + (1 + zUnChVal|id), data = df_like, REML = F, control = lmerControl(optimizer = "bobyqa"))
-m7_rands <- lmer(zConf ~ zChVal + zUnChVal + (1 + zChVal + zUnChVal|id), data = df_like, REML = F, control = lmerControl(optimizer = "bobyqa"))
-m8_rands <- lmer(zConf ~ zChVal * zUnChVal + (1 + zChVal + zUnChVal|id), data = df_like, REML = F, control = lmerControl(optimizer = "bobyqa"))
+m1_rands <- lmer(Conf ~ DiffVal + (1 + DiffVal|id), data = df_like, REML = F, 
+                 control = lmerControl(optimizer = "bobyqa"))
+m2_rands <- lmer(Conf ~ TotVal + (1 + TotVal|id), data = df_like, REML = F, 
+                 control = lmerControl(optimizer = "bobyqa"))
+m3_rands <- lmer(Conf ~ DiffVal + TotVal + (1 + DiffVal + TotVal|id), data = df_like, REML = F, 
+                 control = lmerControl(optimizer = "bobyqa"))
+m4_rands <- lmer(Conf ~ DiffVal * TotVal + (1 +  DiffVal + TotVal|id), data = df_like, REML = F, 
+                 control = lmerControl(optimizer = "bobyqa"))
+m5_rands <- lmer(Conf ~ ChVal + (1 + ChVal|id), data = df_like, REML = F, 
+                 control = lmerControl(optimizer = "bobyqa"))
+m6_rands <- lmer(Conf ~ UnChVal + (1 + UnChVal|id), data = df_like, REML = F, 
+                 control = lmerControl(optimizer = "bobyqa"))
+m7_rands <- lmer(Conf ~ ChVal + UnChVal + (1 + ChVal + UnChVal|id), data = df_like, REML = F, 
+                 control = lmerControl(optimizer = "bobyqa"))
+m8_rands <- lmer(Conf ~ ChVal * UnChVal + (1 + ChVal + UnChVal|id), data = df_like, REML = F, 
+                 control = lmerControl(optimizer = "bobyqa"))
 
 ### Calculate AIC
 AIC_like <- round(AIC(m1_randi, m2_randi, m3_randi, m4_randi, 
@@ -86,24 +106,40 @@ rownames(BIC_like)[which(BIC_like$BIC == min(BIC_like$BIC))]
 
 ## Dislike frame
 ### No random slopes
-l1_randi <- lmer(zConf ~ zDiffVal + (1|id), data = df_dislike, REML = F, control = lmerControl(optimizer = "bobyqa"))
-l2_randi <- lmer(zConf ~ zTotVal + (1|id), data = df_dislike, REML = F, control = lmerControl(optimizer = "bobyqa"))
-l3_randi <- lmer(zConf ~ zDiffVal + zTotVal + (1|id), data = df_dislike, REML = F, control = lmerControl(optimizer = "bobyqa"))
-l4_randi <- lmer(zConf ~ zDiffVal * zTotVal + (1|id), data = df_dislike, REML = F, control = lmerControl(optimizer = "bobyqa"))
-l5_randi <- lmer(zConf ~ zChVal + (1|id), data = df_dislike, REML = F, control = lmerControl(optimizer = "bobyqa"))
-l6_randi <- lmer(zConf ~ zUnChVal + (1|id), data = df_dislike, REML = F, control = lmerControl(optimizer = "bobyqa"))
-l7_randi <- lmer(zConf ~ zChVal + zUnChVal + (1|id), data = df_dislike, REML = F, control = lmerControl(optimizer = "bobyqa"))
-l8_randi <- lmer(zConf ~ zChVal * zUnChVal + (1|id), data = df_dislike, REML = F, control = lmerControl(optimizer = "bobyqa"))
+l1_randi <- lmer(Conf ~ DiffVal + (1|id), data = df_dislike, REML = F, 
+                 control = lmerControl(optimizer = "bobyqa"))
+l2_randi <- lmer(Conf ~ TotVal + (1|id), data = df_dislike, REML = F, 
+                 control = lmerControl(optimizer = "bobyqa"))
+l3_randi <- lmer(Conf ~ DiffVal + TotVal + (1|id), data = df_dislike, REML = F, 
+                 control = lmerControl(optimizer = "bobyqa"))
+l4_randi <- lmer(Conf ~ DiffVal * TotVal + (1|id), data = df_dislike, REML = F, 
+                 control = lmerControl(optimizer = "bobyqa"))
+l5_randi <- lmer(Conf ~ ChVal + (1|id), data = df_dislike, REML = F, 
+                 control = lmerControl(optimizer = "bobyqa"))
+l6_randi <- lmer(Conf ~ UnChVal + (1|id), data = df_dislike, REML = F, 
+                 control = lmerControl(optimizer = "bobyqa"))
+l7_randi <- lmer(Conf ~ ChVal + UnChVal + (1|id), data = df_dislike, REML = F, 
+                 control = lmerControl(optimizer = "bobyqa"))
+l8_randi <- lmer(Conf ~ ChVal * UnChVal + (1|id), data = df_dislike, REML = F, 
+                 control = lmerControl(optimizer = "bobyqa"))
 
 ### Random slopes
-l1_rands <- lmer(zConf ~ zDiffVal + (1 + zDiffVal|id), data = df_dislike, REML = F, control = lmerControl(optimizer = "bobyqa"))
-l2_rands <- lmer(zConf ~ zTotVal + (1 + zTotVal|id), data = df_dislike, REML = F, control = lmerControl(optimizer = "bobyqa"))
-l3_rands <- lmer(zConf ~ zDiffVal + zTotVal + (1 + zDiffVal + zTotVal|id), data = df_dislike, REML = F, control = lmerControl(optimizer = "bobyqa"))
-l4_rands <- lmer(zConf ~ zDiffVal * zTotVal + (1 +  zDiffVal + zTotVal|id), data = df_dislike, REML = F, control = lmerControl(optimizer = "bobyqa"))
-l5_rands <- lmer(zConf ~ zChVal + (1 + zChVal|id), data = df_dislike, REML = F, control = lmerControl(optimizer = "bobyqa"))
-l6_rands <- lmer(zConf ~ zUnChVal + (1 + zUnChVal|id), data = df_dislike, REML = F, control = lmerControl(optimizer = "bobyqa"))
-l7_rands <- lmer(zConf ~ zChVal + zUnChVal + (1 + zChVal + zUnChVal|id), data = df_dislike, REML = F, control = lmerControl(optimizer = "bobyqa"))
-l8_rands <- lmer(zConf ~ zChVal * zUnChVal + (1 + zChVal + zUnChVal|id), data = df_dislike, REML = F, control = lmerControl(optimizer = "bobyqa"))
+l1_rands <- lmer(Conf ~ DiffVal + (1 + DiffVal|id), data = df_dislike, REML = F, 
+                 control = lmerControl(optimizer = "bobyqa"))
+l2_rands <- lmer(Conf ~ TotVal + (1 + TotVal|id), data = df_dislike, REML = F, 
+                 control = lmerControl(optimizer = "bobyqa"))
+l3_rands <- lmer(Conf ~ DiffVal + TotVal + (1 + DiffVal + TotVal|id), data = df_dislike, REML = F, 
+                 control = lmerControl(optimizer = "bobyqa"))
+l4_rands <- lmer(Conf ~ DiffVal * TotVal + (1 +  DiffVal + TotVal|id), data = df_dislike, REML = F, 
+                 control = lmerControl(optimizer = "bobyqa"))
+l5_rands <- lmer(Conf ~ ChVal + (1 + ChVal|id), data = df_dislike, REML = F, 
+                 control = lmerControl(optimizer = "bobyqa"))
+l6_rands <- lmer(Conf ~ UnChVal + (1 + UnChVal|id), data = df_dislike, REML = F, 
+                 control = lmerControl(optimizer = "bobyqa"))
+l7_rands <- lmer(Conf ~ ChVal + UnChVal + (1 + ChVal + UnChVal|id), data = df_dislike, REML = F, 
+                 control = lmerControl(optimizer = "bobyqa"))
+l8_rands <- lmer(Conf ~ ChVal * UnChVal + (1 + ChVal + UnChVal|id), data = df_dislike, REML = F, 
+                 control = lmerControl(optimizer = "bobyqa"))
 
 ### Calculate AIC
 AIC_dislike <- round(AIC(l1_randi, l2_randi, l3_randi, l4_randi, 
@@ -120,14 +156,18 @@ BIC_dislike <- round(BIC(l1_randi, l2_randi, l3_randi, l4_randi,
 rownames(BIC_dislike)[which(BIC_dislike$BIC == min(BIC_dislike$BIC))]
 
 # Confidence prediction of winning models
-## `m8_rands` for more frame and and `l7_rands` for less frame
+## `m8_rands` for like frame and and `l7_rands` for dislike frame
 bestFit_like <- eval(parse(text = bestFit_like))
 bestFit_dislike <- eval(parse(text = bestFit_dislike))
 summary(bestFit_like)
+coef_bestFit_like <- as.data.frame(summary(bestFit_like)$coef[-1, ])
+p.adjust(coef_bestFit_like$Pr, method = "bonferroni")
 summary(bestFit_dislike)
+coef_bestFit_dislike <- as.data.frame(summary(bestFit_dislike)$coef[-1, ])
+p.adjust(coef_bestFit_dislike$Pr, method = "bonferroni")
 ################################################################################
 # Plot figures
-## Choice probability
+## Choice probability (Figure 4a)
 coef <- summary(fit_choice)$coef[, 1]
 choice_pred <- function(x, c){
   return(1 / (1 + exp(-(coef[1] + coef[2] * x + coef[3] * c + coef[4] * x * c))))
@@ -164,14 +204,13 @@ ggplot(df_choice_pred, aes(x = x, y = pred, group = BlockCond)) +
         axis.text = element_text(face = "bold"), 
         plot.margin = unit(c(20, 10, 10, 10), "mm")) -> p1
 
-## Confidence
-pred_conf <- ggpredict(fit_conf, terms = c("zTotVal", "BlockCond"))
+## Confidence (Figure 4b)
+pred_conf <- ggpredict(fit_conf, terms = c("TotVal", "BlockCond"))
 pred_conf$group <- factor(pred_conf$group, levels = c("like", "dislike"))
 ggplot(pred_conf, aes(x, predicted, color = group)) + 
   geom_line(linewidth = 1.4) + 
   geom_ribbon(aes(ymin = conf.low, ymax = conf.high, color = group), alpha = 0.1) + 
   theme_classic(base_size = 22, base_line_size = 1) + scale_color_grey() +
-  xlab("Baseline level") + ylab("Estimated mean confidence") + 
   xlab("Summed value") + ylab("Estimated mean confidence") + 
   scale_color_manual(values = c("#080808", "#e0e0e0"), limits = c("like", "dislike"), labels = c(like = "Like", dislike = "Dislike")) + 
   scale_x_continuous(breaks = seq(-2, 3, 1), limits = c(-2, 3)) + 
@@ -182,7 +221,7 @@ ggplot(pred_conf, aes(x, predicted, color = group)) +
         axis.text = element_text(face = "bold"), 
         plot.margin = unit(c(20, 10, 10, 10), "mm")) -> p2
 
-## AIC
+## AIC (Figure 4c)
 AIC_diff_sum_like <- round(AIC(m1_randi, m2_randi, m3_randi, m4_randi, 
                                m1_rands, m2_rands, m3_rands, m4_rands), 2)
 AIC_diff_sum_dislike <- round(AIC(l1_randi, l2_randi, l3_randi, l4_randi, 
@@ -201,7 +240,7 @@ rbind(AIC_diff_sum_like[which(AIC_diff_sum_like$AIC == min(AIC_diff_sum_like$AIC
   ggplot(aes(x = frame, y = AIC)) + 
   geom_point(aes(shape = rule), size = 5) + 
   scale_x_discrete(limits = c("like", "dislike"), labels = c(like = "Like", dislike = "Dislike")) + 
-  scale_y_continuous(breaks = seq(8000, 9000, 200), limits = c(8000, 9000)) + 
+  scale_y_continuous(breaks = seq(800, 9000, 200), limits = c(8000, 9000)) + 
   scale_shape_manual(values = c(5, 8), labels = c(ch = "Chosen-unchosen", ds = "Diff-sum")) + 
   guides(shape = guide_legend(title = "Rule")) + 
   xlab("Frame") + ylab("AIC") + 
@@ -212,20 +251,20 @@ rbind(AIC_diff_sum_like[which(AIC_diff_sum_like$AIC == min(AIC_diff_sum_like$AIC
         legend.text = element_text(size = 16),
         plot.margin = unit(c(10, 10, 10, 10), "mm")) -> p3
 
-## Hierarchical linear regressions
+## Hierarchical linear regressions (Figure 4d)
 data.frame(Coefficient = c(summary(bestFit_like)$coef[1:4, 1], 
                            summary(bestFit_dislike)$coef[1:3, 1], 0), 
            SEM = c(summary(bestFit_like)$coef[1:4, 2], 
                    summary(bestFit_dislike)$coef[1:3, 2], 0)) %>% 
-  mutate(Variable = rep(c("Intercept", "Chosen", "Unchosen", "Interaction"), 2), 
-         Condition = c(rep("like", 4), rep("dislike", 4))) -> df_coef
-ggplot(df_coef, aes(x = Variable, y = Coefficient, fill = Condition)) + 
+  mutate(Variable = rep(c("Intercept", "Chosen", "Unchosen", "Chosen*Unchosen"), 2), 
+         Condition = c(rep("like", 4), rep("dislike", 4))) %>% 
+  ggplot(aes(x = Variable, y = Coefficient, fill = Condition)) + 
   geom_hline(yintercept = 0) + 
   geom_bar(stat = "identity", position = "dodge") + 
   geom_errorbar(aes(ymin = Coefficient - SEM, ymax = Coefficient + SEM), 
                 linewidth = 1.1, width = 0.2, position = position_dodge(0.9), 
                 color = "#7d7d7d") + 
-  scale_x_discrete(limit = c("Chosen", "Unchosen", "Interaction", "Intercept")) + 
+  scale_x_discrete(limit = c("Chosen", "Unchosen", "Chosen*Unchosen", "Intercept")) + 
   scale_y_continuous(breaks = seq(-1.0, 1.0, 0.5), limits =  c(-1.0, 1.0)) + 
   scale_fill_manual(values = c("#080808", "#e0e0e0"), 
                     limits = c("like", "dislike"), 
@@ -239,14 +278,14 @@ ggplot(df_coef, aes(x = Variable, y = Coefficient, fill = Condition)) +
         legend.text = element_text(size = 16),
         plot.margin = unit(c(10, 10, 10, 10), "mm")) -> p4
 
-## Aggregate multiple plots
+## Aggregate multiple plots (Figure 4)
 plot_grid(plot_grid(p1, p2, labels = c("a", "b"), label_size = 32), 
           plot_grid(p3, p4, align = "h", labels = c("c", "d"), label_size = 32), nrow = 2)
 ggsave("Figure4.png", width = 1440, height = 1200, units = "px", scale = 3.2)
 ggsave("Figure4.pdf", width = 1440, height = 1200, units = "px", scale = 3.2)
 
-## Accuracy (for Appendix C)
-pred_corr <- ggpredict(fit_corr, terms = c("zDiffVal", "BlockCond", "zTotVal"))
+## Accuracy (Appendix C)
+pred_corr <- ggpredict(fit_corr, terms = c("DiffVal", "BlockCond", "TotVal"))
 pred_corr$group <- factor(pred_corr$group, levels = c("like", "dislike"))
 ggplot(pred_corr, aes(x = x, y = predicted, group = group)) + 
   geom_line(linewidth = 1.4, aes(linetype = group)) + 
